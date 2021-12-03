@@ -1,7 +1,7 @@
 # Telemetry Go kit Log
 
-This package contains a [Telemetry Logger]() interface compatible implementation
-based on [Go kit log](). 
+This package contains a [Telemetry Logger](https://github.com/tetratelabs/telemetry)
+interface compatible implementation based on [Go kit log](https://gokit.io/). 
 
 For information on the Telemetry Logger interface, see:
 https://github.com/tetratelabs/telemetry
