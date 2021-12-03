@@ -1,0 +1,6 @@
+github.com/go-kit/log v0.2.0 h1:7i2K3eKTos3Vc0enKCfnVcgHh2olr/MyfboYq7cAcFw=
+github.com/go-kit/log v0.2.0/go.mod h1:NwTd00d/i8cPZ3xOwwiv2PO5MOcx78fFErGNcVmBjv0=
+github.com/go-logfmt/logfmt v0.5.1 h1:otpy5pqBCBZ1ng9RQ0dPu4PN7ba75Y/aA+UpowDyNVA=
+github.com/go-logfmt/logfmt v0.5.1/go.mod h1:WYhtIu8zTZfxdn5+rREduYbwxfcBr/Vr6KEVveWlfTs=
+github.com/tetratelabs/telemetry v0.1.0 h1:iV+hg0Fue+ATWQxb1gR2D2IqRZasKZO13gch1IQo4NA=
+github.com/tetratelabs/telemetry v0.1.0/go.mod h1:0ML85UszIK/NTN/DgA8DtpWA3iPSri02KmG7CExVOdk=
