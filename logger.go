@@ -16,6 +16,7 @@ package logger
 
 import (
 	"context"
+	"io"
 	"sync/atomic"
 
 	"github.com/go-kit/log"
@@ -25,40 +26,65 @@ import (
 // compile time check for compatibility with the telemetry.Logger interface.
 var _ telemetry.Logger = (*Logger)(nil)
 
+// Level is an enumeration of the available log levels.
+type Level int32
+
 // Available log levels.
 const (
-	Error  = 0
-	Info   = 5
-	Debug  = 10
+	None  Level = 0
+	Error Level = 1
+	Info  Level = 5
+	Debug Level = 10
 )
+
+var levelToString = map[Level]string{
+	None:  "none",
+	Error: "error",
+	Info:  "info",
+	Debug: "debug",
+}
+
+var stringToLevel = map[string]Level{
+	"none":  None,
+	"error": Error,
+	"info":  Info,
+	"debug": Debug,
+}
 
 // Logger implements the telemetry.Logger interface using Go kit Log.
 type Logger struct {
 	// ctx holds the Context to extract key-value pairs from to be added to each
 	// log line.
-	ctx    context.Context
+	ctx context.Context
 	// args holds the key-value pairs to be added to each log line.
-	args   []interface{}
+	args []interface{}
 	// metric holds the Metric to increment each time Info() or Error() is called.
 	metric telemetry.Metric
 	// lvl holds the configured log level.
-	lvl    int32
+	lvl *int32
 	// logger holds the Go kit logger to use.
 	logger log.Logger
 }
 
 // New returns a new telemetry.Logger implementation based on Go kit log.
 func New(logger log.Logger) *Logger {
+	lvl := int32(Info)
 	return &Logger{
 		ctx:    context.Background(),
-		lvl:    Info,
+		lvl:    &lvl,
 		logger: logger,
 	}
 }
 
+// NewSyncLogfmt returns a new telemetry.Logger implementation using Go kit's
+// sync writer and logfmt output format.
+func NewSyncLogfmt(w io.Writer) *Logger {
+	return New(log.NewSyncLogger(log.NewLogfmtLogger(w)))
+}
+
 // SetLevel provides the ability to set the desired logging level.
 // This function can be used at runtime and is safe for concurrent use.
-func (l *Logger) SetLevel(lvl int32) {
+func (l *Logger) SetLevel(lvl Level) {
 	if lvl < Info {
 		lvl = Error
 	} else if lvl < Debug {
@@ -66,12 +92,12 @@ func (l *Logger) SetLevel(lvl int32) {
 	} else {
 		lvl = Debug
 	}
-	atomic.StoreInt32(&l.lvl, lvl)
+	atomic.StoreInt32(l.lvl, int32(lvl))
 }
 
 // Debug logging with key-value pairs. Don't be shy, use it.
 func (l *Logger) Debug(msg string, keyValues ...interface{}) {
-	if atomic.LoadInt32(&l.lvl) < Debug {
+	if atomic.LoadInt32(l.lvl) < int32(Debug) {
 		return
 	}
 	args := []interface{}{"msg", msg, "level", "debug"}
@@ -93,7 +119,7 @@ func (l *Logger) Info(msg string, keyValues ...interface{}) {
 	if l.metric != nil {
 		l.metric.RecordContext(l.ctx, 1)
 	}
-	if atomic.LoadInt32(&l.lvl) < int32(Info) {
+	if atomic.LoadInt32(l.lvl) < int32(Info) {
 		return
 	}
 	args := []interface{}{"msg", msg, "level", "info"}
@@ -112,6 +138,9 @@ func (l *Logger) Info(msg string, keyValues ...interface{}) {
 func (l *Logger) Error(msg string, err error, keyValues ...interface{}) {
 	if l.metric != nil {
 		l.metric.RecordContext(l.ctx, 1)
+	}
+	if atomic.LoadInt32(l.lvl) < int32(Error) {
+		return
 	}
 	args := []interface{}{"msg", msg, "level", "error", "error", err}
 	args = append(args, telemetry.KeyValuesFromContext(l.ctx)...)
@@ -133,7 +162,7 @@ func (l *Logger) With(keyValues ...interface{}) telemetry.Logger {
 		ctx:    l.ctx,
 		metric: l.metric,
 		logger: l.logger,
-		lvl:    atomic.LoadInt32(&l.lvl),
+		lvl:    l.lvl,
 	}
 	copy(newLogger.args, l.args)
 
@@ -161,7 +190,7 @@ func (l *Logger) Context(ctx context.Context) telemetry.Logger {
 		ctx:    ctx,
 		metric: l.metric,
 		logger: l.logger,
-		lvl:    atomic.LoadInt32(&l.lvl),
+		lvl:    l.lvl,
 	}
 	copy(newLogger.args, l.args)
 
@@ -177,7 +206,7 @@ func (l *Logger) Metric(m telemetry.Metric) telemetry.Logger {
 		ctx:    l.ctx,
 		metric: m,
 		logger: l.logger,
-		lvl:    atomic.LoadInt32(&l.lvl),
+		lvl:    l.lvl,
 	}
 	copy(newLogger.args, l.args)
 
