@@ -174,14 +174,6 @@ func (l *Logger) With(keyValues ...interface{}) telemetry.Logger {
 	return newLogger
 }
 
-// KeyValuesToContext takes provided key-value pairs and places them in Context.
-// Logging implementations should try to use this function instead of rolling
-// their own. This allows for different logger implementations to collaborate,
-// if they are simultaneously present in an application.
-func (l *Logger) KeyValuesToContext(ctx context.Context, keyValues ...interface{}) context.Context {
-	return telemetry.KeyValuesToContext(ctx, keyValues...)
-}
-
 // Context attaches provided Context to the Logger allowing metadata found in
 // this context to be used for log lines and metrics labels.
 func (l *Logger) Context(ctx context.Context) telemetry.Logger {
