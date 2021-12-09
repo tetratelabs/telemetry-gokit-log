@@ -6,7 +6,7 @@ require (
 	github.com/go-kit/log v0.2.0
 	github.com/tetratelabs/multierror v1.1.0
 	github.com/tetratelabs/run v0.1.0
-	github.com/tetratelabs/telemetry v0.1.0
+	github.com/tetratelabs/telemetry v0.2.0
 )
 
 require (
