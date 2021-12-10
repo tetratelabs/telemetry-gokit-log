@@ -16,7 +16,7 @@ github.com/tetratelabs/multierror v1.1.0/go.mod h1:kH3SzI/z+FwEbV9bxQDx4GiIgE2dj
 github.com/tetratelabs/run v0.1.0 h1:8XwkuD4oz13FwW1EwaPfFb65fyn86u5/kuFEsAerbDg=
 github.com/tetratelabs/run v0.1.0/go.mod h1:fhjT5Vs96raNf1CgCEcKKO6eM/AHAZY+XA1EqSslLRY=
 github.com/tetratelabs/telemetry v0.1.0/go.mod h1:0ML85UszIK/NTN/DgA8DtpWA3iPSri02KmG7CExVOdk=
-github.com/tetratelabs/telemetry v0.2.0 h1:yy1cV2dBGboQLBY9d2h9B45dZfzp8VpkUkX8yMkkG4U=
-github.com/tetratelabs/telemetry v0.2.0/go.mod h1:jDUcf1A2u4F5V1io5RdipM/bKz/hFCsx/RAgGopC37s=
-github.com/tetratelabs/telemetry-gokit-log v0.2.1 h1:Z76b5XgewdiHH5Yzxqxho8tfs6RHTB6CK+uPeu55Si4=
-github.com/tetratelabs/telemetry-gokit-log v0.2.1/go.mod h1:jSnSY7VTqReLOkegu3LDdIzVV9ZWZ9rOPcZPglvfIVE=
+github.com/tetratelabs/telemetry v0.3.0 h1:DU13Jf7Fj8cHALz7G/xaNjNicem3Jx1NeQrb7OyX9SQ=
+github.com/tetratelabs/telemetry v0.3.0/go.mod h1:jDUcf1A2u4F5V1io5RdipM/bKz/hFCsx/RAgGopC37s=
+github.com/tetratelabs/telemetry-gokit-log v0.3.0 h1:T/gUgY3GfAdRjcuMksqc2rQfhpQ6aPOM28p/P6PF7L4=
+github.com/tetratelabs/telemetry-gokit-log v0.3.0/go.mod h1:yIwzWfX6slUU4qn+dRbc+yy2YnYvr416vpM/RRuR/rY=
