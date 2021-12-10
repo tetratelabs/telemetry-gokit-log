@@ -15,46 +15,43 @@
 package logger
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
-
-	"github.com/tetratelabs/multierror"
-	"github.com/tetratelabs/run"
 )
 
-// compile time check for compatibility with the run.Config interface.
-var _ run.Config = (*ScopeManager)(nil)
-
-// ScopeManager manages scoped loggers.
-type ScopeManager struct {
-	logger       *Logger
-	outputLevels string
-
-	mtx      sync.Mutex
-	registry map[string]*scopedLogger
+var levelToString = map[Level]string{
+	None:  "none",
+	Error: "error",
+	Info:  "info",
+	Debug: "debug",
 }
 
-type scopedLogger struct {
+// Manager manages scoped loggers.
+type Manager struct {
+	logger *Logger
+
+	mtx      sync.Mutex
+	registry map[string]*scope
+}
+
+type scope struct {
 	name        string
 	description string
 	logger      *Logger
 }
 
-// NewScopeManager returns a new Scope Manager for Logger.
-func NewScopeManager(logger *Logger) *ScopeManager {
-	return &ScopeManager{
-		logger:       logger,
-		outputLevels: levelToString[Level(atomic.LoadInt32(logger.lvl))],
-		registry:     make(map[string]*scopedLogger),
+// NewManager returns a new Scope Manager for Logger.
+func NewManager(logger *Logger) *Manager {
+	return &Manager{
+		logger:   logger,
+		registry: make(map[string]*scope),
 	}
 }
 
-// Register takes a name and description and returns a scoped Logger.
-func (s *ScopeManager) Register(name, description string) *Logger {
+// RegisterScope takes a name and description and returns a scoped Logger.
+func (s *Manager) RegisterScope(name, description string) *Logger {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -63,24 +60,21 @@ func (s *ScopeManager) Register(name, description string) *Logger {
 	if ok {
 		return scoped.logger
 	}
-	lvl := atomic.LoadInt32(s.logger.lvl)
-	scoped = &scopedLogger{
+	newLogger := New(s.logger.UnwrapLogger())
+	newLogger.SetLevel(s.logger.Level())
+	scoped = &scope{
 		name:        name,
 		description: description,
-		logger: &Logger{
-			ctx:    context.Background(),
-			lvl:    &lvl,
-			logger: s.logger.logger,
-		},
+		logger:      newLogger,
 	}
 	s.registry[name] = scoped
 
 	return scoped.logger
 }
 
-// Deregister will attempt to deregister a scoped Logger identified by the
+// DeregisterScope will attempt to deregister a scoped Logger identified by the
 // provided name. If the logger was found, the function returns true.
-func (s *ScopeManager) Deregister(name string) bool {
+func (s *Manager) DeregisterScope(name string) bool {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -92,70 +86,21 @@ func (s *ScopeManager) Deregister(name string) bool {
 	return true
 }
 
-// Name implements run.Unit.
-func (s *ScopeManager) Name() string {
-	return "log-manager"
-}
+func (s *Manager) Scopes() []string {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 
-// FlagSet implements run.Config.
-func (s *ScopeManager) FlagSet() *run.FlagSet {
 	keys := make([]string, 0, len(s.registry))
-	for k := range s.registry {
-		keys = append(keys, k)
+	for _, scope := range s.registry {
+		keys = append(keys, scope.name)
 	}
 	sort.Strings(keys)
 
-	fs := run.NewFlagSet("Logging options")
-	fs.StringVar(&s.outputLevels, "log-output-level", s.outputLevels, fmt.Sprintf(
-		"Comma-separated minimum per-scope logging level of messages to output, "+
-			"in the form of [default_level,]<scope>:<level>,<scope>:<level>,... "+
-			"where scope can be one of [%s] and default_level or level can be "+
-			"one of [%s, %s, %s]",
-		strings.Join(keys, ", "),
-		"debug", "info", "error",
-	))
-
-	return fs
-}
-
-// Validate implements run.Config.
-func (s *ScopeManager) Validate() error {
-	var mErr error
-
-	s.outputLevels = strings.ToLower(s.outputLevels)
-	outputLevels := strings.Split(s.outputLevels, ",")
-	if len(outputLevels) == 0 {
-		return nil
-	}
-	for _, ol := range outputLevels {
-		osl := strings.Split(ol, ":")
-		switch len(osl) {
-		case 1:
-			lvl, ok := stringToLevel[strings.Trim(ol, "\r\n\t ")]
-			if !ok {
-				mErr = multierror.Append(mErr, fmt.Errorf("%q is not a valid log level", ol))
-				continue
-			}
-			s.SetDefaultOutputLevel(lvl)
-		case 2:
-			lvl, ok := stringToLevel[strings.Trim(osl[1], "\r\n\t ")]
-			if !ok {
-				mErr = multierror.Append(mErr, fmt.Errorf("%q is not a valid log level", ol))
-				continue
-			}
-			if err := s.SetScopeOutputLevel(osl[0], lvl); err != nil {
-				mErr = multierror.Append(mErr, err)
-			}
-		default:
-			mErr = multierror.Append(mErr, fmt.Errorf("%q is not a valid <scope>:<level> pair", ol))
-		}
-	}
-
-	return mErr
+	return keys
 }
 
 // SetDefaultOutputLevel sets the minimum log output level for all scopes.
-func (s *ScopeManager) SetDefaultOutputLevel(lvl Level) {
+func (s *Manager) SetDefaultOutputLevel(lvl Level) {
 	// update base logger
 	s.logger.SetLevel(lvl)
 	// update all scoped loggers
@@ -165,7 +110,7 @@ func (s *ScopeManager) SetDefaultOutputLevel(lvl Level) {
 }
 
 // SetScopeOutputLevel sets the minimum log output level for a given scope.
-func (s *ScopeManager) SetScopeOutputLevel(name string, lvl Level) error {
+func (s *Manager) SetScopeOutputLevel(name string, lvl Level) error {
 	s.mtx.Lock()
 	name = strings.ToLower(strings.Trim(name, "\r\n\t "))
 	sc, has := s.registry[name]
@@ -179,12 +124,12 @@ func (s *ScopeManager) SetScopeOutputLevel(name string, lvl Level) error {
 }
 
 // GetDefaultOutputLevel returns the default minimum output level for scopes.
-func (s *ScopeManager) GetDefaultOutputLevel() Level {
-	return Level(atomic.LoadInt32(s.logger.lvl))
+func (s *Manager) GetDefaultOutputLevel() Level {
+	return s.logger.Level()
 }
 
 // GetOutputLevel returns the minimum log output level for a given scope.
-func (s *ScopeManager) GetOutputLevel(name string) (Level, error) {
+func (s *Manager) GetOutputLevel(name string) (Level, error) {
 	s.mtx.Lock()
 	name = strings.ToLower(strings.Trim(name, "\r\n\t "))
 	sc, has := s.registry[name]
@@ -192,12 +137,12 @@ func (s *ScopeManager) GetOutputLevel(name string) (Level, error) {
 	if !has {
 		return None, fmt.Errorf("scope %q not found", name)
 	}
-	return Level(atomic.LoadInt32(sc.logger.lvl)), nil
+	return sc.logger.Level(), nil
 }
 
 // PrintRegisteredScopes logs all the registered scopes and their configured
 // output levels.
-func (s *ScopeManager) PrintRegisteredScopes() {
+func (s *Manager) PrintRegisteredScopes() {
 	pad := 7
 
 	names := make([]string, 0, len(s.registry))
@@ -213,7 +158,7 @@ func (s *ScopeManager) PrintRegisteredScopes() {
 	fmt.Printf("- %-*s [%-5s]  %s\n",
 		pad,
 		"default",
-		levelToString[Level(atomic.LoadInt32(s.logger.lvl))],
+		levelToString[s.logger.Level()],
 		"",
 	)
 	for _, n := range names {
@@ -221,7 +166,7 @@ func (s *ScopeManager) PrintRegisteredScopes() {
 		fmt.Printf("- %-*s [%-5s]  %s\n",
 			pad,
 			sc.name,
-			levelToString[Level(atomic.LoadInt32(sc.logger.lvl))],
+			levelToString[sc.logger.Level()],
 			sc.description,
 		)
 	}

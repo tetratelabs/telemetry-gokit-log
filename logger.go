@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package logger provides a tetratelabs/telemetry Logger implementation based
+// on Go kit log.
 package logger
 
 import (
@@ -36,20 +38,6 @@ const (
 	Info  Level = 5
 	Debug Level = 10
 )
-
-var levelToString = map[Level]string{
-	None:  "none",
-	Error: "error",
-	Info:  "info",
-	Debug: "debug",
-}
-
-var stringToLevel = map[string]Level{
-	"none":  None,
-	"error": Error,
-	"info":  Info,
-	"debug": Debug,
-}
 
 // Logger implements the telemetry.Logger interface using Go kit Log.
 type Logger struct {
@@ -82,6 +70,12 @@ func NewSyncLogfmt(w io.Writer) *Logger {
 	return New(log.NewSyncLogger(log.NewLogfmtLogger(w)))
 }
 
+// UnwrapLogger returns the wrapped original logger implementation used by this
+// Logging bridge.
+func (l *Logger) UnwrapLogger() log.Logger {
+	return l.logger
+}
+
 // SetLevel provides the ability to set the desired logging level.
 // This function can be used at runtime and is safe for concurrent use.
 func (l *Logger) SetLevel(lvl Level) {
@@ -93,6 +87,11 @@ func (l *Logger) SetLevel(lvl Level) {
 		lvl = Debug
 	}
 	atomic.StoreInt32(l.lvl, int32(lvl))
+}
+
+// Level returns the currently configured logging level.
+func (l *Logger) Level() Level {
+	return Level(atomic.LoadInt32(l.lvl))
 }
 
 // Debug logging with key-value pairs. Don't be shy, use it.
@@ -178,7 +177,7 @@ func (l *Logger) With(keyValues ...interface{}) telemetry.Logger {
 // this context to be used for log lines and metrics labels.
 func (l *Logger) Context(ctx context.Context) telemetry.Logger {
 	newLogger := &Logger{
-		args:   make([]interface{}, len(l.args), len(l.args)),
+		args:   make([]interface{}, len(l.args)),
 		ctx:    ctx,
 		metric: l.metric,
 		logger: l.logger,
@@ -194,7 +193,7 @@ func (l *Logger) Context(ctx context.Context) telemetry.Logger {
 // in the logger, it can be used for Metrics labels.
 func (l *Logger) Metric(m telemetry.Metric) telemetry.Logger {
 	newLogger := &Logger{
-		args:   make([]interface{}, len(l.args), len(l.args)),
+		args:   make([]interface{}, len(l.args)),
 		ctx:    l.ctx,
 		metric: m,
 		logger: l.logger,
