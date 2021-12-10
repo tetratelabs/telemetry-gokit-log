@@ -1,4 +1,4 @@
-module github.com/tetratelabs/telemetry-gokit-log/scopes
+module github.com/tetratelabs/telemetry-gokit-log/group
 
 go 1.17
 
