@@ -23,20 +23,21 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/tetratelabs/telemetry"
+	"github.com/tetratelabs/telemetry/level"
 )
 
 // compile time check for compatibility with the telemetry.Logger interface.
-var _ telemetry.Logger = (*Logger)(nil)
-
-// Level is an enumeration of the available log levels.
-type Level int32
+var (
+	_ telemetry.Logger = (*Logger)(nil)
+	_ level.Logger     = (*Logger)(nil)
+)
 
 // Available log levels.
 const (
-	None  Level = 0
-	Error Level = 1
-	Info  Level = 5
-	Debug Level = 10
+	None  = level.None
+	Error = level.Error
+	Info  = level.Info
+	Debug = level.Debug
 )
 
 // Logger implements the telemetry.Logger interface using Go kit Log.
@@ -74,24 +75,6 @@ func NewSyncLogfmt(w io.Writer) *Logger {
 // Logging bridge.
 func (l *Logger) UnwrapLogger() log.Logger {
 	return l.logger
-}
-
-// SetLevel provides the ability to set the desired logging level.
-// This function can be used at runtime and is safe for concurrent use.
-func (l *Logger) SetLevel(lvl Level) {
-	if lvl < Info {
-		lvl = Error
-	} else if lvl < Debug {
-		lvl = Info
-	} else {
-		lvl = Debug
-	}
-	atomic.StoreInt32(l.lvl, int32(lvl))
-}
-
-// Level returns the currently configured logging level.
-func (l *Logger) Level() Level {
-	return Level(atomic.LoadInt32(l.lvl))
 }
 
 // Debug logging with key-value pairs. Don't be shy, use it.
@@ -198,6 +181,40 @@ func (l *Logger) Metric(m telemetry.Metric) telemetry.Logger {
 		metric: m,
 		logger: l.logger,
 		lvl:    l.lvl,
+	}
+	copy(newLogger.args, l.args)
+
+	return newLogger
+}
+
+// SetLevel provides the ability to set the desired logging level.
+// This function can be used at runtime and is safe for concurrent use.
+func (l *Logger) SetLevel(lvl level.Value) {
+	if lvl < level.Info {
+		lvl = level.Error
+	} else if lvl < level.Debug {
+		lvl = level.Info
+	} else {
+		lvl = level.Debug
+	}
+	atomic.StoreInt32(l.lvl, int32(lvl))
+}
+
+// Level returns the currently configured logging level.
+func (l *Logger) Level() level.Value {
+	return level.Value(atomic.LoadInt32(l.lvl))
+}
+
+// New returns a new Logger based on the original implementation but with
+// the log level decoupled.
+func (l *Logger) New() telemetry.Logger {
+	lvl := atomic.LoadInt32(l.lvl)
+	newLogger := &Logger{
+		args:   make([]interface{}, len(l.args)),
+		ctx:    l.ctx,
+		metric: l.metric,
+		logger: l.logger,
+		lvl:    &lvl,
 	}
 	copy(newLogger.args, l.args)
 
