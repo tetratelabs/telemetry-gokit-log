@@ -23,21 +23,19 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/tetratelabs/telemetry"
-	"github.com/tetratelabs/telemetry/level"
 )
 
 // compile time check for compatibility with the telemetry.Logger interface.
 var (
 	_ telemetry.Logger = (*Logger)(nil)
-	_ level.Logger     = (*Logger)(nil)
 )
 
 // Available log levels.
 const (
-	None  = level.None
-	Error = level.Error
-	Info  = level.Info
-	Debug = level.Debug
+	None  = telemetry.LevelNone
+	Error = telemetry.LevelError
+	Info  = telemetry.LevelInfo
+	Debug = telemetry.LevelDebug
 )
 
 // Logger implements the telemetry.Logger interface using Go kit Log.
@@ -139,14 +137,8 @@ func (l *Logger) With(keyValues ...interface{}) telemetry.Logger {
 	if len(keyValues)%2 != 0 {
 		keyValues = append(keyValues, "(MISSING)")
 	}
-	newLogger := &Logger{
-		args:   make([]interface{}, len(l.args), len(l.args)+len(keyValues)),
-		ctx:    l.ctx,
-		metric: l.metric,
-		logger: l.logger,
-		lvl:    l.lvl,
-	}
-	copy(newLogger.args, l.args)
+	newLogger := l.clone()
+	newLogger.args = make([]interface{}, len(l.args), len(l.args)+len(keyValues))
 
 	for i := 0; i < len(keyValues); i += 2 {
 		if k, ok := keyValues[i].(string); ok {
@@ -159,15 +151,8 @@ func (l *Logger) With(keyValues ...interface{}) telemetry.Logger {
 // Context attaches provided Context to the Logger allowing metadata found in
 // this context to be used for log lines and metrics labels.
 func (l *Logger) Context(ctx context.Context) telemetry.Logger {
-	newLogger := &Logger{
-		args:   make([]interface{}, len(l.args)),
-		ctx:    ctx,
-		metric: l.metric,
-		logger: l.logger,
-		lvl:    l.lvl,
-	}
-	copy(newLogger.args, l.args)
-
+	newLogger := l.clone()
+	newLogger.ctx = ctx
 	return newLogger
 }
 
@@ -175,34 +160,28 @@ func (l *Logger) Context(ctx context.Context) telemetry.Logger {
 // record each invocation of Info and Error log lines. If context is available
 // in the logger, it can be used for Metrics labels.
 func (l *Logger) Metric(m telemetry.Metric) telemetry.Logger {
-	newLogger := &Logger{
-		args:   make([]interface{}, len(l.args)),
-		ctx:    l.ctx,
-		metric: m,
-		logger: l.logger,
-		lvl:    l.lvl,
-	}
-	copy(newLogger.args, l.args)
+	newLogger := l.clone()
+	newLogger.metric = m
 
 	return newLogger
 }
 
 // SetLevel provides the ability to set the desired logging level.
 // This function can be used at runtime and is safe for concurrent use.
-func (l *Logger) SetLevel(lvl level.Value) {
-	if lvl < level.Info {
-		lvl = level.Error
-	} else if lvl < level.Debug {
-		lvl = level.Info
+func (l *Logger) SetLevel(lvl telemetry.Level) {
+	if lvl < telemetry.LevelInfo {
+		lvl = telemetry.LevelError
+	} else if lvl < telemetry.LevelDebug {
+		lvl = telemetry.LevelInfo
 	} else {
-		lvl = level.Debug
+		lvl = telemetry.LevelDebug
 	}
 	atomic.StoreInt32(l.lvl, int32(lvl))
 }
 
 // Level returns the currently configured logging level.
-func (l *Logger) Level() level.Value {
-	return level.Value(atomic.LoadInt32(l.lvl))
+func (l *Logger) Level() telemetry.Level {
+	return telemetry.Level(atomic.LoadInt32(l.lvl))
 }
 
 // New returns a new Logger based on the original implementation but with
@@ -215,6 +194,25 @@ func (l *Logger) New() telemetry.Logger {
 		metric: l.metric,
 		logger: l.logger,
 		lvl:    &lvl,
+	}
+	copy(newLogger.args, l.args)
+
+	return newLogger
+}
+
+// Clone returns a cloned instance of the current logger.
+func (l *Logger) Clone() telemetry.Logger {
+	return l.clone()
+}
+
+// clone the current logger and return it
+func (l *Logger) clone() *Logger {
+	newLogger := &Logger{
+		args:   make([]interface{}, len(l.args)),
+		ctx:    l.ctx,
+		metric: l.metric,
+		logger: l.logger,
+		lvl:    l.lvl,
 	}
 	copy(newLogger.args, l.args)
 
